@@ -8,12 +8,7 @@ pipeline{
         SCANNER_HOME=tool 'sonar-scanner'
     }
     stages {
-        stage('Checkout from Git'){
-            steps{
-                git branch: 'master', url: 'https://github.com/NotHarshhaa/DevOps-Projects/DevOps-Project-28/Chatbot-UI.git'
-            }
-        }
-        stage('Install Dependencies') {
+        stage('Install Dependencies'){
             steps {
                 sh "npm install"
             }
@@ -71,16 +66,6 @@ pipeline{
                 sh 'docker run -d --name chatbot -p 3000:3000 NotHarshhaa/chatbot:latest'
             }
         }
-        stage('Deploy to kubernetes'){
-            steps{
-                withAWS(credentials: 'aws-key', region: 'us-east-1'){
-                script{
-                    withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8s', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
-                       sh 'kubectl apply -f k8s/chatbot-ui.yaml'
-                  }
-                }
-            }
-        }
-        }
+       
     }
     }
