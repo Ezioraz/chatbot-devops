@@ -1,71 +1,84 @@
-pipeline{
+pipeline {
     agent any
-    tools{
+
+    tools {
         jdk 'jdk17'
-        nodejs 'node18'
     }
+
     environment {
-        SCANNER_HOME=tool 'sonar-scanner'
+        SCANNER_HOME = tool 'sonar-scanner'
+        IMAGE_NAME = "ezdocker007/chatbot:latest"
     }
+
     stages {
-        stage('Install Dependencies'){
+
+        stage('Install Dependencies') {
             steps {
-                sh "npm install"
-            }
-        }
-        stage("Sonarqube Analysis "){
-            steps{
-                withSonarQubeEnv('sonar-server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Chatbot \
-                    -Dsonar.projectKey=Chatbot '''
-                }
-            }
-        }
-        stage("quality gate"){
-           steps {
                 script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token' 
+                    docker.image('node:18').inside {
+                        sh 'node -v'
+                        sh 'npm install'
+                    }
                 }
-            } 
+            }
         }
+
+        stage("Sonarqube Analysis") {
+            steps {
+                withSonarQubeEnv('sonar-server') {
+                    sh '''
+                    $SCANNER_HOME/bin/sonar-scanner \
+                    -Dsonar.projectName=Chatbot \
+                    -Dsonar.projectKey=Chatbot
+                    '''
+                }
+            }
+        }
+
+        stage("Quality Gate") {
+            steps {
+                script {
+                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
+                }
+            }
+        }
+
         stage('OWASP FS SCAN') {
             steps {
                 dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
                 dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
         }
+
         stage('TRIVY FS SCAN') {
             steps {
                 sh "trivy fs . > trivyfs.json"
             }
         }
-        stage("Docker Build & Push"){
-            steps{
-                script{
-                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){   
-                       sh "docker build -t chatbot ."
-                       sh "docker tag chatbot ezdocker007/chatbot:latest "
-                       sh "docker push ezdocker007/chatbot:latest "
+
+        stage("Docker Build & Push") {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
+                        sh "docker build -t ${IMAGE_NAME} ."
+                        sh "docker push ${IMAGE_NAME}"
                     }
                 }
             }
         }
-        stage("TRIVY"){
-            steps{
-                sh "trivy image ezdocker007/chatbot:latest > trivy.json" 
+
+        stage("TRIVY Image Scan") {
+            steps {
+                sh "trivy image ${IMAGE_NAME} > trivy.json"
             }
         }
-        stage ("Remove container") {
-            steps{
-                sh "docker stop chatbot | true"
-                sh "docker rm chatbot | true"
-             }
-        }
-        stage('Deploy to container'){
-            steps{
-                sh 'docker run -d --name chatbot -p 3000:3000 ezdocker007/chatbot:latest'
+
+        stage("Deploy Container") {
+            steps {
+                sh "docker stop chatbot || true"
+                sh "docker rm chatbot || true"
+                sh "docker run -d --name chatbot -p 3000:3000 ${IMAGE_NAME}"
             }
         }
-       
     }
 }
