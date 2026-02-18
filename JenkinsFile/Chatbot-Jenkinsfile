@@ -8,6 +8,7 @@ pipeline {
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
         IMAGE_NAME = "ezdocker007/chatbot:latest"
+        NVD_API_KEY = credentials('nvd-api-key')
     }
 
     stages {
@@ -48,7 +49,7 @@ pipeline {
 
         stage('OWASP FS SCAN') {
             steps {
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit',
+                dependencyCheck additionalArguments: "--scan ./ --disableYarnAudit --disableNodeAudit  --nvdApiKey ${NVD_API_KEY}",
                                 odcInstallation: 'DP-Check'
                 dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
