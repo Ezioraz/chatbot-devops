@@ -15,9 +15,12 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 script {
-                    docker.image('node:18').inside {
-                        sh 'node -v'
-                        sh 'npm install'
+                    docker.image('node:18').inside('-u root') {
+                        sh '''
+                            node -v
+                            npm config set cache /tmp/.npm --global
+                            npm install
+                        '''
                     }
                 }
             }
@@ -27,9 +30,9 @@ pipeline {
             steps {
                 withSonarQubeEnv('sonar-server') {
                     sh '''
-                    $SCANNER_HOME/bin/sonar-scanner \
-                    -Dsonar.projectName=Chatbot \
-                    -Dsonar.projectKey=Chatbot
+                        $SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectName=Chatbot \
+                        -Dsonar.projectKey=Chatbot
                     '''
                 }
             }
@@ -45,7 +48,8 @@ pipeline {
 
         stage('OWASP FS SCAN') {
             steps {
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
+                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit',
+                                odcInstallation: 'DP-Check'
                 dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
         }
@@ -75,9 +79,11 @@ pipeline {
 
         stage("Deploy Container") {
             steps {
-                sh "docker stop chatbot || true"
-                sh "docker rm chatbot || true"
-                sh "docker run -d --name chatbot -p 3000:3000 ${IMAGE_NAME}"
+                sh '''
+                    docker stop chatbot || true
+                    docker rm chatbot || true
+                    docker run -d --name chatbot -p 3000:3000 ${IMAGE_NAME}
+                '''
             }
         }
     }
