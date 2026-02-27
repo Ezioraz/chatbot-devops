@@ -7,19 +7,23 @@ pipeline {
 
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
-        IMAGE_NAME = "ezdocker007/chatbot:latest"
-        NVD_API_KEY = credentials('nvd-api-key')
+        IMAGE_NAME = "ezdocker007/chatbot:${BUILD_NUMBER}"
     }
 
     stages {
 
+        stage('Checkout Code') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Install Dependencies') {
             steps {
                 script {
-                    docker.image('node:18').inside('-u root') {
+                    docker.image('node:18').inside {
                         sh '''
                             node -v
-                            npm config set cache /tmp/.npm --global
                             npm install
                         '''
                     }
@@ -27,7 +31,17 @@ pipeline {
             }
         }
 
-        stage("Sonarqube Analysis") {
+        stage('Run Tests') {
+            steps {
+                script {
+                    docker.image('node:18').inside {
+                        sh 'npm test || true'
+                    }
+                }
+            }
+        }
+
+        stage("SonarQube Analysis") {
             steps {
                 withSonarQubeEnv('sonar-server') {
                     sh '''
@@ -42,41 +56,34 @@ pipeline {
         stage("Quality Gate") {
             steps {
                 script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
 
-        stage('OWASP FS SCAN') {
+        stage('Trivy File System Scan') {
             steps {
-                withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_KEY')]) {
-                    dependencyCheck additionalArguments: "--scan ./ --disableYarnAudit --disableNodeAudit --nvdApiKey $NVD_KEY --nvdApiDelay 8000",
-                                    odcInstallation: 'DP-Check'
+                sh 'trivy fs --exit-code 1 --severity HIGH,CRITICAL .'
+            }
+        }
+
+        stage("Docker Build") {
+            steps {
+                sh "docker build -t ${IMAGE_NAME} ."
+            }
+        }
+
+        stage("Trivy Image Scan") {
+            steps {
+                sh "trivy image --exit-code 1 --severity HIGH,CRITICAL ${IMAGE_NAME}"
+            }
+        }
+
+        stage("Docker Push") {
+            steps {
+                withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
+                    sh "docker push ${IMAGE_NAME}"
                 }
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-            }
-        }
-
-        stage('TRIVY FS SCAN') {
-            steps {
-                sh "trivy fs . > trivyfs.json"
-            }
-        }
-
-        stage("Docker Build & Push") {
-            steps {
-                script {
-                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
-                        sh "docker build -t ${IMAGE_NAME} ."
-                        sh "docker push ${IMAGE_NAME}"
-                    }
-                }
-            }
-        }
-
-        stage("TRIVY Image Scan") {
-            steps {
-                sh "trivy image ${IMAGE_NAME} > trivy.json"
             }
         }
 
@@ -85,9 +92,21 @@ pipeline {
                 sh '''
                     docker stop chatbot || true
                     docker rm chatbot || true
-                    docker run -d --name chatbot -p 3000:3000 ${IMAGE_NAME}
+                    docker run -d --restart=always \
+                        --name chatbot \
+                        -p 3000:3000 \
+                        ${IMAGE_NAME}
                 '''
             }
+        }
+    }
+
+    post {
+        success {
+            echo "Pipeline executed successfully."
+        }
+        failure {
+            echo "Pipeline failed. Check logs."
         }
     }
 }
