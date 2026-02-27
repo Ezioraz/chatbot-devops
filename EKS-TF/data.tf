@@ -1,9 +1,8 @@
 # Reference existing VPC created by Jenkins-TF
 data "aws_vpc" "shared_vpc" {
-  filter {
-    name   = "tag:Name"
-    values = ["Jenkins-vpc"]
-  }
+  # Use the specific VPC ID from Jenkins-TF deployment
+  # This VPC ID can be obtained from Jenkins-TF outputs: terraform output vpc_id
+  id = "vpc-0be6b800a9cd39a8c"
 }
 
 # Reference existing Internet Gateway
@@ -13,7 +12,7 @@ data "aws_internet_gateway" "shared_igw" {
     values = ["Jenkins-igw"]
   }
   filter {
-    name   = "vpc-id"
+    name   = "attachment.vpc-id"
     values = [data.aws_vpc.shared_vpc.id]
   }
 }
