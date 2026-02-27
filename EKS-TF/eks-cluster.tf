@@ -13,7 +13,7 @@ resource "aws_eks_cluster" "eks-cluster" {
     ]
   }
 
-  version = "1.28"
+  version = "1.29"
 
   depends_on = [
     aws_iam_role_policy_attachment.AmazonEKSClusterPolicy
