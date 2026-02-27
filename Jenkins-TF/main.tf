@@ -141,3 +141,34 @@ resource "aws_instance" "jenkins" {
     Name = "Jenkins-Server"
   }
 }
+
+# Outputs for reference by other modules
+output "vpc_id" {
+  value       = aws_vpc.jenkins_vpc.id
+  description = "Shared VPC ID"
+}
+
+output "vpc_cidr_block" {
+  value       = aws_vpc.jenkins_vpc.cidr_block
+  description = "Shared VPC CIDR block"
+}
+
+output "jenkins_subnet_id" {
+  value       = aws_subnet.jenkins_subnet.id
+  description = "Jenkins Subnet ID"
+}
+
+output "internet_gateway_id" {
+  value       = aws_internet_gateway.jenkins_igw.id
+  description = "Internet Gateway ID"
+}
+
+output "route_table_id" {
+  value       = aws_route_table.jenkins_rt.id
+  description = "Route Table ID"
+}
+
+output "jenkins_sg_id" {
+  value       = aws_security_group.jenkins_sg.id
+  description = "Jenkins Security Group ID"
+}
